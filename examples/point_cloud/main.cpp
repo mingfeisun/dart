@@ -57,6 +57,7 @@ public:
 
     mPointCloudShape = std::dynamic_pointer_cast<dynamics::PointCloudShape>(
         pointCloudFrame->getShape());
+    mPointCloudShape->setColorMode(dynamics::PointCloudShape::BIND_PER_POINT);
     mVoxelGridShape = std::dynamic_pointer_cast<dynamics::VoxelGridShape>(
         voxelGridFrame->getShape());
 
@@ -99,6 +100,11 @@ public:
 
     // Update point cloud
     mPointCloudShape->setPoints(pointCloud);
+
+    // Update point cloud colors
+    auto colors = generatePointCloudColors(pointCloud);
+    assert(pointCloud.size() == colors.size());
+    mPointCloudShape->setColors(colors);
 
     // Update voxel
     mVoxelGridShape->updateOccupancy(pointCloud, sensorPos);
@@ -178,6 +184,26 @@ protected:
       if (pointCloud.size() == numPoints)
         return pointCloud;
     }
+  }
+
+  std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>
+  generatePointCloudColors(const octomap::Pointcloud& pointCloud)
+  {
+    std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>
+        colors;
+    colors.reserve(pointCloud.size());
+    for (const auto& point : pointCloud)
+    {
+      float r = point.z();
+      float g = 0.1f;
+      float b = 1.f - point.z();
+      r = math::clip(r, 0.1f, 0.9f);
+      g = math::clip(g, 0.1f, 0.9f);
+      b = math::clip(b, 0.1f, 0.9f);
+      colors.emplace_back(Eigen::Vector4f(r, g, b, 0.5).cast<double>());
+    }
+
+    return colors;
   }
 
   SkeletonPtr mRobot;
@@ -420,8 +446,8 @@ public:
 
 protected:
   osg::ref_ptr<dart::gui::osg::ImGuiViewer> mViewer;
-  PointCloudWorld* mNode;
-  ::osg::ref_ptr<gui::osg::GridVisual> mGrid;
+  osg::ref_ptr<PointCloudWorld> mNode;
+  osg::ref_ptr<gui::osg::GridVisual> mGrid;
 };
 
 dynamics::SkeletonPtr createRobot(const std::string& name)
@@ -533,7 +559,7 @@ int main()
 
   // Add control widget for atlas
   viewer->getImGuiHandler()->addWidget(
-      std::make_shared<PointCloudWidget>(viewer, node.get(), grid));
+      std::make_shared<PointCloudWidget>(viewer, node, grid));
 
   viewer->addAttachment(grid);
 

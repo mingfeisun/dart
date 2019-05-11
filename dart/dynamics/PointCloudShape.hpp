@@ -46,6 +46,13 @@ namespace dynamics {
 class PointCloudShape : public Shape
 {
 public:
+  enum ColorMode
+  {
+    BIND_OVERALL = 0, ///< Use one color for all the points
+    BIND_PER_POINT,   ///< Use one color per point
+    USE_SHAPE_COLOR,  ///< Use the color specified by the ShapeAspect
+  };
+
   /// Constructor
   ///
   /// \param[in] visualSize The size of cube that represents each point.
@@ -89,8 +96,34 @@ public:
   /// Returns the number of points.
   std::size_t getNumPoints() const;
 
-  /// Remove all the points.
+  /// Removes all the points.
   void removeAllPoints();
+
+  /// Sets the color mode.
+  void setColorMode(ColorMode mode);
+
+  /// Returns the color mode.
+  ColorMode getColorMode() const;
+
+  /// Sets the overall color.
+  ///
+  /// This function resizes the colors to one.
+  void setOverallColor(const Eigen::Vector4d& color);
+
+  /// Returns the overall color.
+  Eigen::Vector4d getOverallColor() const;
+
+  /// Sets the point cloud colors.
+  ///
+  /// The count of colors should be the same with points. It's undefined
+  /// behavior, otherwise.
+  void setColors(const std::vector<
+                 Eigen::Vector4d,
+                 Eigen::aligned_allocator<Eigen::Vector4d>>& colors);
+
+  /// Returns the point cloud colors.
+  const std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>&
+  getColors() const;
 
   /// Sets size of visual object that represents each point.
   void setVisualSize(double size);
@@ -110,6 +143,13 @@ protected:
 
   /// List of points
   std::vector<Eigen::Vector3d> mPoints;
+
+  /// The color mode
+  ColorMode mColorMode;
+
+  /// List of colors
+  std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>
+      mColors;
 
   /// The size of visual object that represents each point.
   double mVisualSize;
