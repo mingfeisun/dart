@@ -48,9 +48,18 @@ static const std::string& robotName = "KR5";
 class PointCloudWorld : public gui::osg::WorldNode
 {
 public:
+  enum PointSamplingMode
+  {
+    SAMPLE_ON_ROBOT = 0,
+    SAMPLE_IN_BOX = 1,
+  };
+
   explicit PointCloudWorld(
       simulation::WorldPtr world, dynamics::SkeletonPtr robot)
-    : gui::osg::WorldNode(std::move(world)), mRobot(std::move(robot))
+    : gui::osg::WorldNode(std::move(world)),
+      mSampleingMode(SAMPLE_IN_BOX),
+      mRobot(std::move(robot))
+
   {
     auto pointCloudFrame = mWorld->getSimpleFrame("point cloud");
     auto voxelGridFrame = mWorld->getSimpleFrame("voxel");
@@ -63,8 +72,19 @@ public:
 
     mPointCloudVisualAspect = pointCloudFrame->getVisualAspect();
     mVoxelGridVisualAspect = voxelGridFrame->getVisualAspect();
+    mVoxelGridVisualAspect->hide();
 
     assert(mVoxelGridShape);
+  }
+
+  void setPointSamplingMode(PointSamplingMode mode)
+  {
+    mSampleingMode = mode;
+  }
+
+  PointSamplingMode getPointSamplingMode() const
+  {
+    return mSampleingMode;
   }
 
   // Triggered at the beginning of each simulation step
@@ -82,7 +102,20 @@ public:
     mRobot->setPositions(pos);
 
     // Generate point cloud from robot meshes
-    auto pointCloud = generatePointCloud(500);
+    octomap::Pointcloud pointCloud;
+    auto numPoints = 500u;
+    switch (mSampleingMode)
+    {
+      case SAMPLE_ON_ROBOT:
+        pointCloud = generatePointCloudOnRobot(numPoints);
+        break;
+      case SAMPLE_IN_BOX:
+        pointCloud = generatePointCloudInBox(
+            numPoints,
+            Eigen::Vector3d::Constant(-1.5),
+            Eigen::Vector3d::Constant(1.5));
+        break;
+    }
 
     // Update sensor position
     static double time = 0.0;
@@ -107,7 +140,7 @@ public:
     mPointCloudShape->setColors(colors);
 
     // Update voxel
-    mVoxelGridShape->updateOccupancy(pointCloud, sensorPos);
+    //    mVoxelGridShape->updateOccupancy(pointCloud, sensorPos);
   }
 
   dynamics::VisualAspect* getPointCloudVisualAspect()
@@ -131,9 +164,10 @@ public:
   }
 
 protected:
-  octomap::Pointcloud generatePointCloud(std::size_t numPoints)
+  octomap::Pointcloud generatePointCloudOnRobot(std::size_t numPoints)
   {
     octomap::Pointcloud pointCloud;
+    pointCloud.reserve(numPoints);
 
     const auto numBodies = mRobot->getNumBodyNodes();
     assert(numBodies > 0);
@@ -186,25 +220,59 @@ protected:
     }
   }
 
+  octomap::Pointcloud generatePointCloudInBox(
+      std::size_t numPoints,
+      const Eigen::Vector3d& min = Eigen::Vector3d::Constant(-0.5),
+      const Eigen::Vector3d& max = Eigen::Vector3d::Constant(0.5))
+  {
+    octomap::Pointcloud pointCloud;
+    pointCloud.reserve(numPoints);
+
+    for (auto i = 0u; i < numPoints; ++i)
+    {
+      const Eigen::Vector3d point = math::Random::uniform(min, max);
+      pointCloud.push_back(
+          static_cast<float>(point.x()),
+          static_cast<float>(point.y()),
+          static_cast<float>(point.z()));
+    }
+
+    return pointCloud;
+  }
+
   std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>
   generatePointCloudColors(const octomap::Pointcloud& pointCloud)
   {
+    const auto& points = mPointCloudShape->getPoints();
+    double minZ = std::numeric_limits<double>::max();
+    double maxZ = std::numeric_limits<double>::min();
+    for (const auto& point : points)
+    {
+      minZ = std::min(minZ, point.z());
+      maxZ = std::max(maxZ, point.z());
+    }
+    double diffZ
+        = std::max(std::abs(maxZ - minZ), std::numeric_limits<double>::min());
+
     std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>>
         colors;
     colors.reserve(pointCloud.size());
     for (const auto& point : pointCloud)
     {
-      float r = point.z();
-      float g = 0.1f;
-      float b = 1.f - point.z();
+      float r
+          = (point.z() - static_cast<float>(minZ)) / static_cast<float>(diffZ);
+      float g = 0.0f;
+      float b = 1.f - r;
       r = math::clip(r, 0.1f, 0.9f);
       g = math::clip(g, 0.1f, 0.9f);
       b = math::clip(b, 0.1f, 0.9f);
-      colors.emplace_back(Eigen::Vector4f(r, g, b, 0.5).cast<double>());
+      colors.emplace_back(Eigen::Vector4f(r, g, b, 0.75).cast<double>());
     }
 
     return colors;
   }
+
+  PointSamplingMode mSampleingMode;
 
   SkeletonPtr mRobot;
 
@@ -291,13 +359,21 @@ public:
       }
 
       int robotUpdate = mNode->getUpdate() ? 0 : 1;
-      if (ImGui::RadioButton("Run Robot Updating", &robotUpdate, 0)
-          && mNode->getUpdate())
+      if (ImGui::RadioButton("Run Robot Updating", &robotUpdate, 0))
         mNode->setUpdate(true);
       ImGui::SameLine();
-      if (ImGui::RadioButton("Stop Robot Updating", &robotUpdate, 1)
-          && mNode->getUpdate())
+      if (ImGui::RadioButton("Stop Robot Updating", &robotUpdate, 1))
         mNode->setUpdate(false);
+
+      int samplingMode
+          = mNode->getPointSamplingMode() == PointCloudWorld::SAMPLE_ON_ROBOT
+                ? 0
+                : 1;
+      if (ImGui::RadioButton("Sample on robot", &samplingMode, 0))
+        mNode->setPointSamplingMode(PointCloudWorld::SAMPLE_ON_ROBOT);
+      ImGui::SameLine();
+      if (ImGui::RadioButton("Sample in box", &samplingMode, 1))
+        mNode->setPointSamplingMode(PointCloudWorld::SAMPLE_IN_BOX);
     }
 
     if (ImGui::CollapsingHeader("View", ImGuiTreeNodeFlags_DefaultOpen))

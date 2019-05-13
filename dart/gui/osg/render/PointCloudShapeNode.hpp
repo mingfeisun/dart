@@ -33,8 +33,10 @@
 #ifndef DART_GUI_OSG_RENDER_POINTCLOUDSHAPENODE_HPP_
 #define DART_GUI_OSG_RENDER_POINTCLOUDSHAPENODE_HPP_
 
+#include <Eigen/Dense>
 #include <osg/MatrixTransform>
 
+#include "dart/dynamics/PointCloudShape.hpp"
 #include "dart/gui/osg/render/ShapeNode.hpp"
 
 namespace dart {
@@ -48,6 +50,7 @@ namespace osg {
 namespace render {
 
 class PointCloudShapeGeode;
+class PointCloudShapeBillboardGeode;
 
 class PointCloudShapeNode : public ShapeNode, public ::osg::Group
 {
@@ -59,12 +62,20 @@ public:
   void refresh() override;
   void extractData(bool firstTime);
 
+  ::osg::ref_ptr<PointCloudShapeGeode> createGeode(
+      const Eigen::Vector3d& point, double size, const Eigen::Vector4d& color);
+
 protected:
   virtual ~PointCloudShapeNode() override;
 
   std::shared_ptr<dart::dynamics::PointCloudShape> mPointCloudShape;
-  PointCloudShapeGeode* mGeode;
+  ::osg::ref_ptr<PointCloudShapeGeode> mGeode;
+  std::vector<::osg::ref_ptr<PointCloudShapeGeode>> mGeodes;
+//  std::vector<::osg::ref_ptr<PointCloudShapeBillboardGeode>> mBillboardGeodes;
   std::size_t mPointCloudVersion;
+
+  dynamics::PointCloudShape::PointShapeType mPointShapeType{
+      dynamics::PointCloudShape::PointShapeType::BOX};
 };
 
 } // namespace render

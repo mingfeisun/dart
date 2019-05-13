@@ -53,6 +53,14 @@ public:
     USE_SHAPE_COLOR,  ///< Use the color specified by the ShapeAspect
   };
 
+  enum PointShapeType
+  {
+    POINT = 0,
+    BOX,
+    BILLBOARD_SQUAD,
+    BILLBOARD_CIRCLE,
+  };
+
   /// Constructor
   ///
   /// \param[in] visualSize The size of cube that represents each point.
@@ -99,6 +107,16 @@ public:
   /// Removes all the points.
   void removeAllPoints();
 
+  void setPointShapeType(PointShapeType type)
+  {
+    mPointShapeType = type;
+  }
+
+  PointShapeType getPointShapeType() const
+  {
+    return mPointShapeType;
+  }
+
   /// Sets the color mode.
   void setColorMode(ColorMode mode);
 
@@ -143,6 +161,8 @@ protected:
 
   /// List of points
   std::vector<Eigen::Vector3d> mPoints;
+
+  PointShapeType mPointShapeType;
 
   /// The color mode
   ColorMode mColorMode;
